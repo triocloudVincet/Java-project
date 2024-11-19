@@ -1,0 +1,304 @@
+package com.bordercontrol.views;
+
+import javafx.geometry.Insets;
+import javafx.scene.Scene;
+import javafx.scene.control.*;
+import javafx.scene.layout.VBox;
+import javafx.stage.Stage;
+import javafx.scene.layout.HBox;
+import javafx.scene.layout.Priority;
+import javafx.collections.FXCollections;
+import javafx.collections.ObservableList;
+import com.bordercontrol.models.Traveler;
+import com.bordercontrol.dao.TravelerDAO;
+import com.bordercontrol.dao.EntryExitDAO;
+import java.sql.SQLException;
+import java.time.format.DateTimeFormatter;
+import javafx.geometry.Pos;
+import java.util.List;
+
+public class TravelerListView {
+    private static TravelerDAO travelerDao = new TravelerDAO();
+    private static EntryExitDAO entryExitDao = new EntryExitDAO();
+    
+    public static void show(Stage parentStage) {
+        Stage stage = new Stage();
+        stage.setTitle("View Travelers");
+        
+        // Create TableView
+        TableView<Traveler> tableView = new TableView<>();
+
+        // Set row factory for flag indicators
+        tableView.setRowFactory(tv -> new TableRow<Traveler>() {
+            @Override
+            protected void updateItem(Traveler traveler, boolean empty) {
+                super.updateItem(traveler, empty);
+                if (traveler == null || empty) {
+                    setStyle("");
+                } else if (traveler.isFlagged()) {
+                    // Light red background for flagged travelers
+                    setStyle("-fx-background-color: #ffebee;");
+                    
+                    // Add tooltip with flag information
+                    Tooltip tooltip = new Tooltip(
+                        "Flagged: " + traveler.getActiveFlagType()
+                    );
+                    setTooltip(tooltip);
+                } else {
+                    setStyle("");
+                    setTooltip(null);
+                }
+            }
+        });
+        
+        // Create columns
+        TableColumn<Traveler, String> passportCol = new TableColumn<>("Passport");
+        passportCol.setCellValueFactory(data -> javafx.beans.binding.Bindings.createStringBinding(
+            () -> data.getValue().getPassportNumber()
+        ));
+        passportCol.setPrefWidth(120);
+        
+        TableColumn<Traveler, String> nameCol = new TableColumn<>("Full Name");
+        nameCol.setCellValueFactory(data -> javafx.beans.binding.Bindings.createStringBinding(
+            () -> data.getValue().getFirstName() + " " + data.getValue().getLastName()
+        ));
+        nameCol.setPrefWidth(150);
+        
+        TableColumn<Traveler, String> nationalityCol = new TableColumn<>("Nationality");
+        nationalityCol.setCellValueFactory(data -> javafx.beans.binding.Bindings.createStringBinding(
+            () -> data.getValue().getNationality()
+        ));
+        nationalityCol.setPrefWidth(100);
+        
+        TableColumn<Traveler, String> dobCol = new TableColumn<>("Date of Birth");
+        dobCol.setCellValueFactory(data -> javafx.beans.binding.Bindings.createStringBinding(
+            () -> data.getValue().getDateOfBirth().format(DateTimeFormatter.ofPattern("dd-MM-yyyy"))
+        ));
+        dobCol.setPrefWidth(100);
+        
+        TableColumn<Traveler, String> expiryCol = new TableColumn<>("Passport Expiry");
+        expiryCol.setCellValueFactory(data -> javafx.beans.binding.Bindings.createStringBinding(
+            () -> data.getValue().getPassportExpiryDate().format(DateTimeFormatter.ofPattern("dd-MM-yyyy"))
+        ));
+        expiryCol.setPrefWidth(100);
+
+        // Add actions column
+        TableColumn<Traveler, Void> actionCol = new TableColumn<>("Actions");
+        actionCol.setPrefWidth(250);
+        actionCol.setCellFactory(column -> new TableCell<>() {
+            private final HBox buttons = new HBox(5);
+            private final Button editButton = new Button("Edit");
+            private final Button recordButton = new Button("Entry/Exit");
+            private final Button historyButton = new Button("History");
+            private final Button flagButton = new Button("Flag");
+
+            {
+                // Initialize buttons
+                editButton.setStyle("""
+                    -fx-background-color: #f39c12;
+                    -fx-text-fill: white;
+                    -fx-cursor: hand;
+                    -fx-font-size: 11px;
+                    -fx-padding: 3 8;
+                    """);
+
+                recordButton.setStyle("""
+                    -fx-background-color: #3498db;
+                    -fx-text-fill: white;
+                    -fx-cursor: hand;
+                    -fx-font-size: 11px;
+                    -fx-padding: 3 8;
+                    """);
+
+                historyButton.setStyle("""
+                    -fx-background-color: #2ecc71;
+                    -fx-text-fill: white;
+                    -fx-cursor: hand;
+                    -fx-font-size: 11px;
+                    -fx-padding: 3 8;
+                    """);
+
+                flagButton.setStyle("""
+                    -fx-background-color: #e74c3c;
+                    -fx-text-fill: white;
+                    -fx-cursor: hand;
+                    -fx-font-size: 11px;
+                    -fx-padding: 3 8;
+                    """);
+
+                buttons.setAlignment(Pos.CENTER);
+                buttons.getChildren().addAll(editButton, recordButton, historyButton, flagButton);
+            }
+
+            @Override
+            protected void updateItem(Void item, boolean empty) {
+                super.updateItem(item, empty);
+                if (empty) {
+                    setGraphic(null);
+                } else {
+                    Traveler traveler = getTableView().getItems().get(getIndex());
+                    
+                    // Update flag button text based on flag status
+                    if (traveler.isFlagged()) {
+                        flagButton.setText("Resolve");
+                        flagButton.setStyle("""
+                            -fx-background-color: #8e44ad;
+                            -fx-text-fill: white;
+                            -fx-cursor: hand;
+                            -fx-font-size: 11px;
+                            -fx-padding: 3 8;
+                            """);
+                    } else {
+                        flagButton.setText("Flag");
+                        flagButton.setStyle("""
+                            -fx-background-color: #e74c3c;
+                            -fx-text-fill: white;
+                            -fx-cursor: hand;
+                            -fx-font-size: 11px;
+                            -fx-padding: 3 8;
+                            """);
+                    }
+                    
+                    editButton.setOnAction(event -> {
+                        TravelerEditView.show(stage, traveler);
+                        loadTravelers(tableView);
+                    });
+
+                    recordButton.setOnAction(event -> {
+                        EntryExitRecordView.show(stage, traveler);
+                    });
+
+                    historyButton.setOnAction(event -> {
+                        TravelerHistoryView.show(stage, traveler);
+                    });
+
+                    flagButton.setOnAction(event -> {
+                        if (traveler.isFlagged()) {
+                            // Show resolution view
+                            FlagResolutionView.show(stage, traveler);
+                        } else {
+                            // Show flag view
+                            FlagTravelerView.show(stage, traveler);
+                        }
+                        loadTravelers(tableView); // Refresh after flag action
+                    });
+
+                    setGraphic(buttons);
+                }
+            }
+        });
+        
+        // Add columns to table
+        tableView.getColumns().addAll(passportCol, nameCol, nationalityCol, dobCol, expiryCol, actionCol);
+        
+        // Create search box
+        TextField searchField = new TextField();
+        searchField.setPromptText("Search by passport number or name...");
+        searchField.setPrefWidth(250);
+        
+        Button searchButton = new Button("Search");
+        searchButton.setStyle("""
+            -fx-background-color: #3498db;
+            -fx-text-fill: white;
+            -fx-padding: 5 15;
+            -fx-cursor: hand;
+            """);
+        
+        Button refreshButton = new Button("Refresh");
+        refreshButton.setStyle("""
+            -fx-background-color: #2ecc71;
+            -fx-text-fill: white;
+            -fx-padding: 5 15;
+            -fx-cursor: hand;
+            """);
+        
+        HBox searchBox = new HBox(10);
+        searchBox.setAlignment(Pos.CENTER);
+        searchBox.setPadding(new Insets(10));
+        searchBox.getChildren().addAll(searchField, searchButton, refreshButton);
+        
+        // Add status label
+        Label statusLabel = new Label();
+        statusLabel.setStyle("-fx-text-fill: #7f8c8d;");
+        
+        // Search functionality
+        searchButton.setOnAction(e -> {
+            try {
+                String searchTerm = searchField.getText().trim();
+                if (!searchTerm.isEmpty()) {
+                    List<Traveler> results = travelerDao.searchTravelers(searchTerm);
+                    tableView.setItems(FXCollections.observableArrayList(results));
+                    statusLabel.setText("Found " + results.size() + " travelers");
+                } else {
+                    loadTravelers(tableView);
+                }
+            } catch (SQLException ex) {
+                showError("Search Error", "Could not perform search", ex.getMessage());
+            }
+        });
+        
+        // Add enter key handler for search
+        searchField.setOnKeyPressed(e -> {
+            if (e.getCode() == javafx.scene.input.KeyCode.ENTER) {
+                searchButton.fire();
+            }
+        });
+        
+        // Refresh functionality
+        refreshButton.setOnAction(e -> {
+            searchField.clear();
+            loadTravelers(tableView);
+        });
+        
+        // Create layout
+        VBox layout = new VBox(10);
+        layout.setPadding(new Insets(10));
+        layout.getChildren().addAll(searchBox, tableView, statusLabel);
+        VBox.setVgrow(tableView, Priority.ALWAYS);
+        
+        // Create scene
+        Scene scene = new Scene(layout, 900, 600);
+        stage.setScene(scene);
+        
+        // Initial load
+        loadTravelers(tableView);
+        
+        stage.show();
+    }
+    
+    private static void loadTravelers(TableView<Traveler> tableView) {
+        try {
+            List<Traveler> travelers = travelerDao.findAll();
+            tableView.setItems(FXCollections.observableArrayList(travelers));
+            
+            // Update status
+            tableView.getScene().getRoot()
+                    .lookupAll(".label")
+                    .stream()
+                    .filter(node -> node instanceof Label)
+                    .map(node -> (Label) node)
+                    .filter(label -> label.getText() != null && label.getText().contains("Found"))
+                    .findFirst()
+                    .ifPresent(label -> label.setText("Showing " + travelers.size() + " travelers"));
+                    
+        } catch (SQLException e) {
+            showError("Load Error", "Could not load travelers", e.getMessage());
+        }
+    }
+    
+    private static void showError(String title, String header, String content) {
+        Alert alert = new Alert(Alert.AlertType.ERROR);
+        alert.setTitle(title);
+        alert.setHeaderText(header);
+        alert.setContentText(content);
+        alert.showAndWait();
+    }
+    
+    private static void showMessage(String header, String content) {
+        Alert alert = new Alert(Alert.AlertType.INFORMATION);
+        alert.setTitle("Information");
+        alert.setHeaderText(header);
+        alert.setContentText(content);
+        alert.showAndWait();
+    }
+}
